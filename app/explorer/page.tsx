@@ -1,161 +1,149 @@
 "use client";
 
+// 1. Production Shield: Force dynamic rendering and handle Next.js build bailouts
 export const dynamic = "force-dynamic";
 
-import React, { Suspense } from "react";
+import React, { useState, useEffect, Suspense } from "react";
+import { useSpring, useTransform, motion, useMotionValue, AnimatePresence, MotionValue } from "framer-motion";
+import { Activity, Database, Cpu, WifiOff, CheckCircle2, UploadCloud, Lock, X } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { 
-  ArrowLeft, Activity, Shield, Cpu, Globe, 
-  Search, Filter, Zap, Database, Terminal 
-} from "lucide-react";
-import Link from "next/link";
+
+// Mock Components - Replace with your actual imports if they exist
+const CanvasShardMap = ({ activeTraceId, onShardsInvolved, traceX, traceY }: any) => (
+   <div className="absolute inset-0 opacity-40 bg-[url('/hex-grid.svg')] bg-center pointer-events-none" />
+);
+const MagneticCard = ({ children, className }: any) => <div className={className}>{children}</div>;
+
+const MANIFEST_FEED = Array.from({ length: 30 }).map((_, i) => {
+   const hash = Math.floor(Math.abs(Math.sin(i + 42)) * 16777215).toString(16).padStart(6, '0');
+   return `[CERBERUS] TX_${hash}->OK`;
+});
+
+const VisualizerDock = React.memo(({ shardsInvolved, formattedHealth }: { shardsInvolved: number, formattedHealth: MotionValue<string> }) => {
+   return (
+      <div className="h-16 w-full mt-auto border-t border-white/10 bg-[#0B0B14]/90 backdrop-blur-3xl relative z-20 flex font-mono text-[10px] uppercase tracking-widest divide-x divide-white/10 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] flex-shrink-0 overflow-x-auto">
+         <div className="flex-1 min-w-[300px] flex items-center overflow-hidden relative">
+            <motion.div
+               animate={{ x: ["0%", "-50%"] }}
+               transition={{ ease: "linear", duration: 40, repeat: Infinity }}
+               className="flex gap-8 text-white/40 whitespace-nowrap min-w-max pr-8"
+            >
+               {MANIFEST_FEED.map((msg, i) => <span key={`a-${i}`}>{msg}</span>)}
+               {MANIFEST_FEED.map((msg, i) => <span key={`b-${i}`}>{msg}</span>)}
+            </motion.div>
+         </div>
+         <div className="hidden md:flex w-64 px-6 items-center justify-between bg-[#0F0F1A]">
+            <div className="flex items-center gap-2 text-white/40"><Database size={14} className="text-blue-500" /> Shards</div>
+            <div className="text-white font-bold text-lg">{shardsInvolved || "---"}</div>
+         </div>
+      </div>
+   );
+});
 
 function ExplorerContent() {
-  const searchParams = useSearchParams();
-  const isSimulated = searchParams.get("sim") === "true";
-  const shards = searchParams.get("shards") || "1";
-  const fee = searchParams.get("fee") || "0.00";
+   const searchParams = useSearchParams();
+   const txWarpId = searchParams.get('tx');
+   const isSimulation = searchParams.get('sim') === 'true';
+   const simulatedShards = searchParams.get('shards');
+   const simulatedFee = searchParams.get('fee');
 
-  // Mock transaction data for the "Live" feel
-  const transactions = [
-    { id: "tx_8z2k...", type: "Transfer", amount: "500.00 XRD", status: "Committed", time: "2s ago" },
-    { id: "tx_9p1m...", type: "Stake", amount: "1,250.00 XRD", status: "Committed", time: "12s ago" },
-    { id: "tx_2v4n...", type: "Resource Claim", amount: "12.45 XRD", status: "Finalizing", time: "Just now" },
-  ];
+   const [lockedTraceId, setLockedTraceId] = useState<string | null>(isSimulation ? 'sim_preview' : (txWarpId || null));
+   const [shardsInvolved, setShardsInvolved] = useState(55); // Default for visual
 
-  return (
-    <div className="min-h-screen bg-[#08081a] text-white font-sans selection:bg-blue-500/30">
-      {/* Responsive Top Bar */}
-      <nav className="sticky top-0 z-50 bg-[#0a0a25]/80 backdrop-blur-md border-b border-white/5 px-4 lg:px-8 py-4">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="flex items-center gap-4 w-full md:w-auto">
-            <Link href="/" className="p-2 hover:bg-white/5 rounded-full transition-all active:scale-95">
-              <ArrowLeft className="w-5 h-5 text-blue-400" />
-            </Link>
-            <h1 className="text-lg font-bold tracking-tight text-blue-100 flex items-center gap-2">
-              <Database className="w-5 h-5" /> NETWORK EXPLORER
-            </h1>
-          </div>
-          
-          <div className="relative w-full md:w-96 group">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-blue-400 transition-colors" />
-            <input 
-              type="text" 
-              placeholder="Warp to Address / Tx Hash / Shard..." 
-              className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all"
-            />
-          </div>
-        </div>
-      </nav>
+   // Animation values
+   const traceX = useMotionValue(-1000);
+   const traceY = useMotionValue(-1000);
+   const x = useSpring(0, { stiffness: 200, damping: 5 });
+   const healthVal = useTransform(x, [0, 1], [40, 65]);
+   const formattedHealth = useTransform(healthVal, (val) => `98.${Math.floor(val)}%`);
 
-      <main className="p-4 lg:p-8 max-w-7xl mx-auto space-y-6">
-        {/* Cerberus Simulation Banner */}
-        {isSimulated && (
-          <div className="relative overflow-hidden rounded-2xl border border-blue-500/30 bg-blue-500/5 p-6 animate-in fade-in slide-in-from-top-4 duration-700">
-            <div className="absolute top-0 right-0 p-2 opacity-10">
-              <Zap className="w-24 h-24 text-blue-400" />
+   return (
+      <div className="max-w-[1440px] mx-auto h-screen lg:h-[calc(100vh-80px)] flex flex-col relative overflow-hidden bg-[#0A0A12]">
+         <CanvasShardMap activeTraceId={lockedTraceId} onShardsInvolved={setShardsInvolved} traceX={traceX} traceY={traceY} />
+
+         {/* Responsive Wrapper */}
+         <div className="flex-1 flex flex-col lg:flex-row relative z-10 overflow-y-auto lg:overflow-hidden">
+
+            {/* Left Section: Feed */}
+            <div className="w-full lg:w-[480px] p-6 lg:p-12 flex flex-col pointer-events-none">
+               <div className="pointer-events-auto">
+                  <h1 className="text-3xl lg:text-4xl font-black text-white tracking-tight uppercase mb-6">
+                     Live Network <br />
+                     <span className="text-blue-500 shadow-blue-500/50">Trace Explorer</span>
+                  </h1>
+
+                  <MagneticCard className="backdrop-blur-xl bg-[#0c0d1c]/80 border border-white/10 rounded-2xl p-4 flex flex-col gap-2 relative shadow-2xl max-h-[400px] overflow-y-auto">
+                     {isSimulation && (
+                        <div className="absolute inset-0 bg-[#0c0d1c]/95 backdrop-blur-md z-30 flex flex-col items-center justify-center p-6 text-center">
+                           <div className="w-12 h-12 bg-blue-500/20 flex items-center justify-center rounded-full mb-3 border border-blue-500"><CheckCircle2 size={24} className="text-blue-500" /></div>
+                           <h3 className="text-white font-bold uppercase tracking-widest text-sm">Simulation Success</h3>
+                           <p className="text-[10px] text-white/50 font-mono mt-2">Fee: {simulatedFee} XRD • {simulatedShards} Shards</p>
+                           <button className="mt-6 w-full py-3 bg-blue-600 text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-blue-500 transition-all">Publish to Mainnet</button>
+                        </div>
+                     )}
+                     {/* Mock List Item */}
+                     <div className="p-4 rounded-xl border border-blue-500/30 bg-blue-500/10 flex justify-between items-center">
+                        <div className="flex flex-col font-mono">
+                           <span className="text-white font-bold text-xs">TRANSFER_ASSET</span>
+                           <span className="text-[10px] text-white/40">{lockedTraceId || "tx_8z2k..."}</span>
+                        </div>
+                        <span className="text-blue-500 font-bold font-mono text-sm">500.00 XRD</span>
+                     </div>
+                  </MagneticCard>
+               </div>
             </div>
-            <div className="flex flex-col md:flex-row items-center gap-6 relative z-10 text-center md:text-left">
-              <div className="p-4 bg-blue-500/20 rounded-full">
-                <Shield className="w-8 h-8 text-blue-400 animate-pulse" />
-              </div>
-              <div className="space-y-1">
-                <p className="text-blue-400 font-black uppercase text-xs tracking-[0.2em]">Cerberus Pipeline Active</p>
-                <h2 className="text-xl font-bold">Shard Trace: {shards} Parallel Instances</h2>
-                <p className="text-blue-100/60 text-sm max-w-xl">Atomic composition verified across sub-states. Current gas throughput optimized for parallel validation.</p>
-              </div>
-              <div className="md:ml-auto">
-                <span className="px-4 py-2 bg-blue-500 text-white rounded-lg font-bold text-sm shadow-lg shadow-blue-500/20">LIVE FEED</span>
-              </div>
-            </div>
-          </div>
-        )}
 
-        {/* Stats Grid - Fully Responsive */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[
-            { label: "Shard Fee", val: `${fee} XRD`, icon: Activity, color: "text-blue-400" },
-            { label: "Finality", val: "0.8s", icon: Zap, color: "text-yellow-400" },
-            { label: "Consensus", val: "Cerberus", icon: Shield, color: "text-green-400" },
-            { label: "Round", val: "298104", icon: Terminal, color: "text-purple-400" },
-          ].map((stat, i) => (
-            <div key={i} className="bg-white/[0.03] border border-white/10 p-5 rounded-2xl hover:bg-white/[0.05] transition-colors group">
-              <div className="flex justify-between items-start mb-2">
-                <p className="text-gray-400 text-[10px] uppercase tracking-widest font-bold">{stat.label}</p>
-                <stat.icon className={`w-4 h-4 ${stat.color} group-hover:scale-110 transition-transform`} />
-              </div>
-              <p className="text-xl font-mono font-bold">{stat.val}</p>
-            </div>
-          ))}
-        </div>
+            {/* Right Section: Decompiler (Drawer on mobile, Pane on desktop) */}
+            <AnimatePresence>
+               {lockedTraceId && (
+                  <motion.div
+                     initial={{ x: 500, opacity: 0 }}
+                     animate={{ x: 0, opacity: 1 }}
+                     exit={{ x: 500, opacity: 0 }}
+                     className="w-full lg:w-[500px] bg-[#0A0A14]/95 lg:h-full border-l border-white/10 flex flex-col shadow-2xl z-40"
+                  >
+                     <div className="p-6 border-b border-white/10 flex justify-between items-center">
+                        <div>
+                           <div className="text-[10px] text-blue-500 font-bold font-mono uppercase flex items-center gap-2"><Cpu size={12} /> Scrypto Decompiler</div>
+                           <h2 className="text-white font-bold text-lg truncate w-48">{lockedTraceId}</h2>
+                        </div>
+                        <button onClick={() => setLockedTraceId(null)} className="text-white/40 hover:text-white"><X size={20} /></button>
+                     </div>
 
-        {/* Main Explorer Table Area */}
-        <div className="bg-white/[0.02] border border-white/5 rounded-3xl overflow-hidden backdrop-blur-sm">
-          <div className="p-6 border-b border-white/5 flex flex-col md:flex-row justify-between items-center gap-4">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-              <Globe className="w-5 h-5 text-blue-400" />
-              Real-Time Ledger Transitions
-            </h2>
-            <button className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm transition-colors border border-white/10">
-              <Filter className="w-4 h-4" /> Filter Stream
-            </button>
-          </div>
+                     <div className="p-6 space-y-8 overflow-y-auto">
+                        <div>
+                           <h3 className="text-[10px] text-white/40 font-mono font-bold uppercase mb-3 border-b border-white/5 pb-2">Raw Scrypto (Rust)</h3>
+                           <div className="bg-black/50 rounded-xl p-4 border border-white/5 text-[11px] font-mono leading-relaxed overflow-x-auto text-blue-200">
+                              <span className="text-purple-400">CALL_METHOD</span><br />
+                              &nbsp;&nbsp;<span className="text-orange-300">Address</span>("<span className="text-white/40">account_rdx1...</span>")<br />
+                              &nbsp;&nbsp;<span className="text-emerald-400">"withdraw"</span><br />
+                              &nbsp;&nbsp;<span className="text-blue-500">Decimal</span>("<span className="text-emerald-400">100.5</span>");
+                           </div>
+                        </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-white/[0.01] text-gray-500 text-[10px] uppercase tracking-[0.1em]">
-                  <th className="px-6 py-4 font-bold">Transaction ID</th>
-                  <th className="px-6 py-4 font-bold">Type</th>
-                  <th className="px-6 py-4 font-bold">Amount</th>
-                  <th className="px-6 py-4 font-bold">Status</th>
-                  <th className="px-6 py-4 font-bold text-right">Age</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {transactions.map((tx, i) => (
-                  <tr key={i} className="hover:bg-white/[0.02] transition-colors group cursor-pointer">
-                    <td className="px-6 py-4 font-mono text-xs text-blue-400">{tx.id}</td>
-                    <td className="px-6 py-4 text-sm font-medium">{tx.type}</td>
-                    <td className="px-6 py-4 text-sm text-gray-300 font-mono">{tx.amount}</td>
-                    <td className="px-6 py-4">
-                      <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase ${
-                        tx.status === 'Committed' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20'
-                      }`}>
-                        {tx.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right text-xs text-gray-500">{tx.time}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                        <div>
+                           <h3 className="text-[10px] text-white/40 font-mono font-bold uppercase mb-3 border-b border-white/5 pb-2">Cerberus Orbit</h3>
+                           <div className="bg-black/30 rounded-xl h-48 border border-white/5 relative flex items-center justify-center">
+                              <motion.div animate={{ rotate: 360 }} transition={{ duration: 10, repeat: Infinity, ease: "linear" }} className="w-24 h-24 rounded-full border border-blue-500/20 absolute" />
+                              <Activity size={20} className="text-blue-500 animate-pulse" />
+                              <div className="absolute bottom-4 text-[9px] font-mono text-white/40 uppercase">Finality Achieved • 1.2s</div>
+                           </div>
+                        </div>
+                     </div>
+                  </motion.div>
+               )}
+            </AnimatePresence>
+         </div>
 
-          <div className="p-12 flex flex-col items-center justify-center text-center">
-            <div className="relative mb-6">
-              <div className="absolute inset-0 bg-blue-500 blur-[80px] opacity-10 animate-pulse"></div>
-              <Cpu className="w-12 h-12 text-blue-500/40 relative z-10" />
-            </div>
-            <p className="text-gray-400 text-sm max-w-xs">
-              Waiting for new ledger transitions on Shard {shards}...
-            </p>
-          </div>
-        </div>
-      </main>
-    </div>
-  );
+         <VisualizerDock shardsInvolved={shardsInvolved} formattedHealth={formattedHealth} />
+      </div>
+   );
 }
 
 export default function ExplorerPage() {
-  return (
-    <Suspense fallback={
-      <div className="flex flex-col items-center justify-center min-h-screen bg-[#08081a]">
-        <div className="w-12 h-12 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
-        <p className="text-blue-400 font-mono text-xs mt-4 tracking-widest animate-pulse">SYNCING WITH RADIX NETWORK...</p>
-      </div>
-    }>
-      <ExplorerContent />
-    </Suspense>
-  );
+   return (
+      <Suspense fallback={<div className="h-screen bg-[#0A0A12] flex items-center justify-center text-blue-500 font-mono animate-pulse">BOOTING CERBERUS_TRACE...</div>}>
+         <ExplorerContent />
+      </Suspense>
+   );
 }
