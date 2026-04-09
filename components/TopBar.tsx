@@ -1,13 +1,14 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { Bell, User, Search } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Bell, User, Search, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useWallet } from "@/contexts/WalletContext";
 import { OdometerCurrency } from "@/components/Odometer";
 import { useNetwork, NetworkType } from "@/contexts/NetworkContext";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Sidebar } from "@/components/Sidebar";
 
 const TABS: NetworkType[] = ["Mainnet", "Testnet", "Stokenet"];
 
@@ -16,6 +17,7 @@ export function TopBar() {
   const { activeNetwork, setActiveNetwork } = useNetwork();
   const router = useRouter();
   const [isWarping, setIsWarping] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const executeWarp = (hash: string) => {
       setIsWarping(true);
@@ -36,29 +38,58 @@ export function TopBar() {
          )}
       </div>
 
-      <header className="h-20 border-b border-[#1e1e38] flex items-center justify-between px-8 bg-deep-navy sticky top-0 z-40 font-mono text-sm">
-        {/* Network Tabs */}
-        <div className="flex gap-8 h-full relative">
-          {TABS.map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveNetwork(tab)}
-              className={cn(
-                "relative h-full px-1 flex items-center justify-center transition-colors hover:text-white",
-                activeNetwork === tab ? "text-radix-blue font-bold" : "text-text-muted"
-              )}
-            >
-              {tab}
-              {activeNetwork === tab && (
-                <motion.div
-                  layoutId="active-tab-indicator"
-                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-radix-blue"
-                  initial={false}
-                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                />
-              )}
-            </button>
-          ))}
+      {/* Mobile Menu Drawer */}
+      <AnimatePresence>
+        {mobileMenuOpen && (
+           <motion.div 
+              initial={{ x: "-100%" }} animate={{ x: 0 }} exit={{ x: "-100%" }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              className="fixed inset-y-0 left-0 w-64 bg-deep-navy shadow-2xl z-[110] lg:hidden"
+           >
+              <Sidebar />
+           </motion.div>
+        )}
+      </AnimatePresence>
+      {/* Mobile Backdrop */}
+      {mobileMenuOpen && (
+         <div 
+           className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[105] lg:hidden" 
+           onClick={() => setMobileMenuOpen(false)}
+         />
+      )}
+
+      <header className="h-16 sm:h-20 border-b border-[#1e1e38] flex items-center justify-between px-4 sm:px-8 bg-deep-navy sticky top-0 z-40 font-mono text-xs sm:text-sm">
+        {/* Network Tabs & Mobile Toggle */}
+        <div className="flex items-center gap-2 sm:gap-8 h-full relative">
+          <button 
+             className="lg:hidden p-2 text-text-muted hover:text-white transition-colors"
+             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          >
+             <Menu size={20} />
+          </button>
+          
+          <div className="hidden sm:flex gap-8 h-full relative">
+            {TABS.map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveNetwork(tab)}
+                className={cn(
+                  "relative h-full px-1 flex items-center justify-center transition-colors hover:text-white",
+                  activeNetwork === tab ? "text-radix-blue font-bold" : "text-text-muted"
+                )}
+              >
+                {tab}
+                {activeNetwork === tab && (
+                  <motion.div
+                    layoutId="active-tab-indicator"
+                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-radix-blue"
+                    initial={false}
+                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  />
+                )}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Right Controls */}

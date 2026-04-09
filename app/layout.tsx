@@ -42,10 +42,10 @@ export default function RootLayout({
           <BackgroundEnvironment />
           <WalletModal />
           <div className="flex min-h-screen">
-            <div className="fixed inset-y-0 left-0 w-64 z-40">
+            <div className="hidden lg:block fixed inset-y-0 left-0 w-64 z-40">
               <Sidebar />
             </div>
-            <div className="flex-1 ml-64 flex flex-col relative z-20 overflow-hidden">
+            <div className="flex-1 lg:ml-64 flex flex-col relative z-20 overflow-hidden w-full">
               <TopBar />
               <main className="flex-1 relative z-10 w-full h-full">
                 <NetworkTransitionWrapper>
